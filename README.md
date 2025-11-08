@@ -30,6 +30,7 @@
 
 - `RCLONE_CONF_BASE64`: **必需**。Base64 编码的 rclone 配置文件内容。
 - `RCLONE_REMOTE_PATH`: **必需**。远程备份路径（格式如：`remote_name:path/to/backup`）。
+- `TUNNEL_TOKEN`: 可选。从 Cloudflare Zero Trust 获取的 Tunnel 令牌。提供此令牌后，容器将自动为您创建一个到 Memos 服务的公共访问隧道。
 - `DEBUG`: 可选。设置为任意值 (例如 `true`) 可禁用伪装日志，并显示详细的 `rclone` 备份过程，方便调试。
 - `SPACE_ID`: 由 Hugging Face 自动提供。此环境变量用于检测是否在 HF Space 环境中运行，以激活伪装日志功能。
 
@@ -46,8 +47,34 @@ docker run -d \
   -v memos-data:/var/opt/memos \
   -e RCLONE_CONF_BASE64="your_base64_encoded_config" \
   -e RCLONE_REMOTE_PATH="your_remote_path" \
+  -e TUNNEL_TOKEN="your_cloudflare_tunnel_token" \
   memos-webdav
 ```
+
+## 内网穿透 (Cloudflare Tunnel)
+
+本项目集成了 `cloudflared`，可以轻松地将您的 Memos 服务暴露到公网，而无需公网 IP 或复杂的端口转发。
+
+### 如何使用
+
+1.  **获取 Tunnel 令牌**:
+    - 登录到您的 [Cloudflare Zero Trust](https://one.dash.cloudflare.com/) 仪表板。
+    - 在左侧菜单中，找到并点击 **Access** -> **Tunnels**。
+    - 点击 **Create a tunnel**，类型选择 **Cloudflared**。
+    - 为您的 Tunnel 命名（例如 `memos-tunnel`）并保存。
+    - 在下一个页面，复制您的 Tunnel 令牌（`--token` 后面的长字符串）。
+
+2.  **配置公共主机名**:
+    - 创建 Tunnel 后，在 Tunnel 列表中找到您刚创建的 Tunnel，点击 **Configure**。
+    - 选择 **Public Hostname** 标签页，然后点击 **Add a public hostname**。
+    - **Subdomain**: 输入您想要的子域名（例如 `memos`）。
+    - **Domain**: 选择您在 Cloudflare 托管的域名。
+    - **Service**: Type 选择 `HTTP`，URL 填入 `localhost:5230`。
+    - 点击 **Save hostname**。
+
+3.  **启动容器**:
+    - 在 `docker run` 命令中，通过 `-e TUNNEL_TOKEN="<您的令牌>"` 传入您的令牌。
+    - 容器启动后，`cloudflared` 会自动在后台运行，并将您配置的域名指向 Memos 服务。
 
 ## 备份说明
 
