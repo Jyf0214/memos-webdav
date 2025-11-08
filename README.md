@@ -81,17 +81,49 @@ docker run -d \
 - 使用 `rclone sync` 命令同步数据，确保远程存储与本地数据一致
 - 支持 rclone 的加密功能，数据在传输前会被加密
 
-## Rclone 配置
+## 存储后端支持
 
-您需要创建一个包含 WebDAV 或其他存储服务配置的 rclone.conf 文件，然后将其转换为 Base64 编码：
+本容器使用 `rclone` 作为核心备份工具，因此理论上支持 `rclone` 支持的所有存储后端。以下是一些常见后端的配置示例。
 
-```bash
-# 1. 编辑配置文件
-vim rclone.conf
+### S3 兼容存储 (例如 AWS S3, MinIO)
 
-# 2. 转换为 Base64 编码
-base64 -w 0 rclone.conf
-```
+要备份到 S3 或其他 S3 兼容的对象存储，您需要在 `rclone.conf` 文件中配置一个 S3 remote。
+
+1.  **创建 `rclone.conf` 文件**:
+    下面是一个连接到 AWS S3 的示例配置。对于 MinIO 或其他提供商，请相应修改 `provider`, `endpoint` 等字段。
+
+    ```ini
+    [my-s3-remote]
+    type = s3
+    provider = AWS
+    # 建议使用 IAM 角色或 EC2 实例配置文件，因此 env_auth = true
+    # 如果使用 access_key_id 和 secret_access_key，请设置 env_auth = false
+    env_auth = true 
+    region = us-east-1
+    ```
+
+2.  **配置环境变量**:
+    - 将上述 `rclone.conf` 文件内容进行 Base64 编码，并设置为 `RCLONE_CONF_BASE64` 环境变量的值。
+    - 将 `RCLONE_REMOTE_PATH` 设置为您的 S3 remote 名称和路径，例如 `my-s3-remote:my-memos-bucket/backups`。
+
+### WebDAV
+
+1.  **创建 `rclone.conf` 文件**:
+    ```ini
+    [my-webdav-remote]
+    type = webdav
+    url = https://webdav.example.com
+    vendor = other
+    user = your_username
+    pass = your_encrypted_password 
+    ```
+    *注意*: 推荐使用 `rclone config` 命令创建配置，它会自动加密密码。
+
+2.  **配置环境变量**:
+    - 将 `rclone.conf` 文件内容进行 Base64 编码，并设置为 `RCLONE_CONF_BASE64`。
+    - 将 `RCLONE_REMOTE_PATH` 设置为 `my-webdav-remote:path/to/backup`。
+
+> 更多关于 `rclone` 的配置信息，请参考 [rclone 官方文档](https://rclone.org/docs/)。
 
 ## 工作流
 
