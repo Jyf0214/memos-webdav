@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # =================================================================
-# Rclone 加密与版本化备份脚本
+# Rclone 自动备份与恢复脚本
 # =================================================================
-# 本脚本使用 rclone 进行数据的版本化备份。
-# 它会创建带时间戳的备份，并自动轮转，只保留最新的10个版本。
+# 1. 如果本地数据目录为空，脚本会自动从远程拉取最新的备份进行恢复。
+# 2. 如果本地数据目录不为空，脚本会执行版本化备份，并自动轮转，只保留最新的10个版本。
 # =================================================================
 
 # --- 配置与伪装日志 ---
@@ -34,8 +34,49 @@ FAKE_SUCCESS_LOGS=(
     "INFO: Heartbeat signal confirmed from all distributed nodes."
 )
 
-# --- 主要备份逻辑 ---
+# --- 新增：恢复逻辑 ---
+run_restore() {
+    echo "--- 开始执行数据恢复 ---"
 
+    # 检查 rclone 配置文件
+    if ! rclone listremotes >/dev/null 2>&1; then
+        echo "错误：rclone 配置不正确或不存在，无法恢复。" >&2
+        exit 1
+    fi
+
+    echo "正在从远程 '${RCLONE_REMOTE_PATH}' 查找最新的备份..."
+    # 查找最新的备份目录, 忽略 rclone 的错误输出（比如路径不存在）
+    LATEST_BACKUP_DIR=$(rclone lsf --dirs-only "${RCLONE_REMOTE_PATH}" 2>/dev/null | sort | tail -n 1)
+
+    if [ -z "$LATEST_BACKUP_DIR" ]; then
+        echo "警告：在远程路径中没有找到任何备份版本。将以一个空的 Memos 实例开始。"
+        # 确保本地目录存在，以便 Memos 可以正常启动
+        mkdir -p "${MEMOS_DATA_DIR}"
+        echo "--- 恢复过程结束（未找到备份） ---"
+        return 0
+    fi
+
+    FULL_REMOTE_PATH="${RCLONE_REMOTE_PATH}/${LATEST_BACKUP_DIR}"
+    echo "找到最新备份: ${FULL_REMOTE_PATH}"
+    echo "正在将数据恢复到: ${MEMOS_DATA_DIR}"
+
+    # 创建本地目录（如果不存在）
+    mkdir -p "${MEMOS_DATA_DIR}"
+
+    # 使用 'rclone copy' 恢复数据
+    rclone copy "${FULL_REMOTE_PATH}" "${MEMOS_DATA_DIR}" --progress --transfers 4
+    rc_status=$?
+
+    if [ $rc_status -eq 0 ]; then
+        echo "✅ 数据恢复成功！"
+        echo "重要提示：如果 Memos 启动失败，请检查 '${MEMOS_DATA_DIR}' 的文件权限。"
+    else
+        echo "❌ 错误：数据恢复失败！请检查 rclone 日志。" >&2
+    fi
+    echo "--- 恢复过程结束 ---"
+}
+
+# --- 主要备份逻辑 (无重大修改) ---
 run_backup() {
     # 检查 rclone 配置文件是否存在
     if ! rclone listremotes >/dev/null 2>&1; then
@@ -116,9 +157,19 @@ run_backup() {
     fi
 }
 
-# --- 执行带文件锁的备份 ---
+# --- 主执行逻辑 ---
 # 使用 flock 确保脚本的单个实例运行，防止并发问题
 (
-  flock -n 9 || { echo "备份任务已在运行中，本次跳过。" >&2; exit 1; }
-  run_backup
+  flock -n 9 || { echo "备份或恢复任务已在运行中，本次跳过。" >&2; exit 1; }
+
+  # 决策逻辑：如果本地数据目录为空，则恢复；否则，备份。
+  # 使用 `ls -A` 检查目录是否为空，这种方法直观且足够可靠。
+  if [ ! -d "$MEMOS_DATA_DIR" ] || [ -z "$(ls -A "$MEMOS_DATA_DIR")" ]; then
+    echo "本地数据目录 '${MEMOS_DATA_DIR}' 为空或不存在，将尝试从最新备份中恢复。"
+    run_restore
+  else
+    echo "本地数据目录存在数据，将执行常规备份。"
+    run_backup
+  fi
+
 ) 9>"$LOCK_FILE"
