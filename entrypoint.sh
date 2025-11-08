@@ -16,6 +16,27 @@ else
 fi
 # =================================================================
 
+# 恢复数据 (如果配置了 RCLONE_RESTORE_PATH 且本地数据目录为空)
+if [ -n "$RCLONE_RESTORE_PATH" ]; then
+  if [ -z "$(ls -A /var/opt/memos)" ]; then
+    echo "检测到 RCLONE_RESTORE_PATH，正在从远程恢复数据到 /var/opt/memos..."
+    # 确保目标目录存在
+    mkdir -p /var/opt/memos
+    # 执行数据恢复
+    rclone sync "$RCLONE_RESTORE_PATH" /var/opt/memos --progress --transfers 10 --checkers 10 --fast-list --v
+    if [ $? -eq 0 ]; then
+      echo "数据恢复成功。"
+    else
+      echo "错误：数据恢复失败！"
+      exit 1
+    fi
+  else
+    echo "警告：RCLONE_RESTORE_PATH 已设置，但 /var/opt/memos 目录不为空。跳过数据恢复以防止覆盖现有数据。"
+  fi
+else
+  echo "未设置 RCLONE_RESTORE_PATH，跳过数据恢复。"
+fi
+
 # 启动 Memos 应用（在后台运行）
 /usr/local/memos/memos --mode prod --port 5230 &
 

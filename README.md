@@ -30,6 +30,7 @@
 
 - `RCLONE_CONF_BASE64`: **必需**。Base64 编码的 rclone 配置文件内容。
 - `RCLONE_REMOTE_PATH`: 可选。远程备份路径（格式如：`remote_name:path/to/backup`）。默认为 `memos_data:memos_backup`。
+- `RCLONE_RESTORE_PATH`: 可选。远程恢复路径（格式如：`remote_name:path/to/restore`）。如果设置，容器启动时会尝试从该路径恢复数据到 `/var/opt/memos`，但仅当 `/var/opt/memos` 为空时执行，以防止覆盖现有数据。
 - `TUNNEL_TOKEN`: 可选。从 Cloudflare Zero Trust 获取的 Tunnel 令牌。提供此令牌后，容器将自动为您创建一个到 Memos 服务的公共访问隧道。
 - `DEBUG`: 可选。设置为任意值 (例如 `true`) 可禁用伪装日志，并显示详细的 `rclone` 备份过程，方便调试。
 - `SPACE_ID`: 由 Hugging Face 自动提供。此环境变量用于检测是否在 HF Space 环境中运行，以激活伪装日志功能。
