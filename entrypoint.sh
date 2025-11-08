@@ -16,27 +16,6 @@ else
 fi
 # =================================================================
 
-# 恢复数据 (如果 RCLONE_REMOTE_PATH 已设置且本地数据目录为空)
-if [ -n "$RCLONE_REMOTE_PATH" ]; then
-  if [ -z "$(ls -A /var/opt/memos)" ]; then
-    echo "检测到 RCLONE_REMOTE_PATH，正在从 $RCLONE_REMOTE_PATH 恢复数据..."
-    # 确保目标目录存在
-    mkdir -p /var/opt/memos
-    # 执行数据恢复
-    rclone sync "$RCLONE_REMOTE_PATH" /var/opt/memos --progress --transfers 10 --checkers 10 --fast-list --v
-    if [ $? -eq 0 ]; then
-      echo "数据恢复成功。"
-    else
-      echo "错误：数据恢复失败！"
-      exit 1
-    fi
-  else
-    echo "警告：/var/opt/memos 目录不为空。为防止覆盖现有数据，跳过初始数据恢复。"
-  fi
-else
-  echo "未设置 RCLONE_REMOTE_PATH，跳过数据恢复。"
-fi
-
 # 启动 Memos 应用（在后台运行）
 /usr/local/memos/memos --mode prod --port 5230 &
 
@@ -55,15 +34,27 @@ while true; do
 done &
 
 # =================================================================
-# 启动 Cloudflare Tunnel (如果提供了令牌)
+# 启动并监控 Cloudflare Tunnel (如果提供了令牌)
 # =================================================================
 if [ -n "$TUNNEL_TOKEN" ]; then
   echo "检测到 TUNNEL_TOKEN，正在启动远程连接服务..."
-  # 在后台静默运行 cloudflared，将其连接到本地的 Memos 服务
-  # --no-autoupdate 禁用自动更新
-  # 日志输出到 /dev/null 实现完全隐藏
+  # 在后台静默运行 cloudflared，并保存PID
   cloudflared tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" > /dev/null 2>&1 &
+  echo $! > /tmp/cloudflared.pid
   echo "远程连接服务已在后台启动。"
+
+  # 启动健康检查和自动重启的循环
+  (
+    while true; do
+      sleep 60 # 每60秒检查一次
+      if ! kill -0 "$(cat /tmp/cloudflared.pid)" > /dev/null 2>&1; then
+        echo "远程连接服务已断开，正在尝试重启..."
+        cloudflared tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" > /dev/null 2>&1 &
+        echo $! > /tmp/cloudflared.pid
+        echo "远程连接服务已重新启动。"
+      fi
+    done
+  ) &
 else
   echo "未提供 TUNNEL_TOKEN，跳过启动远程连接服务。"
 fi

@@ -1,17 +1,20 @@
 #!/bin/bash
 
 # =================================================================
-# Rclone 加密与备份脚本
+# Rclone 加密与版本化备份脚本
 # =================================================================
-# 本脚本使用 rclone 进行数据备份。entrypoint.sh 会根据
-# RCLONE_CONF_BASE64 环境变量自动创建 rclone.conf 文件。
+# 本脚本使用 rclone 进行数据的版本化备份。
+# 它会创建带时间戳的备份，并自动轮转，只保留最新的10个版本。
 # =================================================================
 
 # --- 配置与伪装日志 ---
 
 # 从环境变量读取远程路径,如果未设置则使用默认值
-RCLONE_REMOTE_PATH=${RCLONE_REMOTE_PATH:-"memos_data:memos_backup"}
+# 注意：路径末尾添加了 /versions 以存放所有版本化备份
+RCLONE_REMOTE_PATH=${RCLONE_REMOTE_PATH:-"memos_data:memos_backup/versions"}
 MEMOS_DATA_DIR="/var/opt/memos"
+MAX_BACKUPS=10
+LOCK_FILE="/tmp/memos_backup.lock"
 
 # 伪装的AI大模型日志
 AI_LOGS=(
@@ -33,52 +36,89 @@ FAKE_SUCCESS_LOGS=(
 
 # --- 主要备份逻辑 ---
 
-# 检查 rclone 配置文件是否存在，仅在非 DEBUG 模式下静默检查
-if ! rclone listremotes >/dev/null 2>&1; then
-  if [ -n "$DEBUG" ]; then
-    echo "错误：rclone 配置不正确或不存在。请检查 RCLONE_CONF_BASE64 环境变量。"
-  fi
-  # 在非 DEBUG 模式下，不输出任何信息，静默失败
-  exit 1
-fi
+run_backup() {
+    # 检查 rclone 配置文件是否存在
+    if ! rclone listremotes >/dev/null 2>&1; then
+        if [ -n "$DEBUG" ]; then
+            echo "错误：rclone 配置不正确或不存在。请检查 RCLONE_CONF_BASE64 环境变量。"
+        fi
+        exit 1
+    fi
 
-# 根据是否设置 DEBUG 环境变量来决定 rclone 的输出模式
-if [ -n "$DEBUG" ]; then
-    echo "----------------------------------------"
-    echo "DEBUG 模式：开始备份 Memos 数据到 ${RCLONE_REMOTE_PATH}"
-    echo "时间: $(date)"
-    echo "----------------------------------------"
-    # 在 DEBUG 模式下，使用详细输出
-    rclone sync "${MEMOS_DATA_DIR}" "${RCLONE_REMOTE_PATH}" --update --verbose --transfers 4
+    # 创建当前备份的时间戳和路径
+    TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    CURRENT_BACKUP_PATH="${RCLONE_REMOTE_PATH}/${TIMESTAMP}"
+
+    # 根据 DEBUG 模式设置 rclone 参数
+    local rclone_opts
+    if [ -n "$DEBUG" ]; then
+        echo "----------------------------------------"
+        echo "DEBUG 模式：开始创建新的版本化备份"
+        echo "时间: $(date)"
+        echo "备份到: ${CURRENT_BACKUP_PATH}"
+        echo "----------------------------------------"
+        rclone_opts="--verbose --transfers 4"
+    else
+        rclone_opts="--quiet --transfers 4"
+    fi
+
+    # 使用 'rclone copy' 将数据备份到新的时间戳目录
+    rclone copy "${MEMOS_DATA_DIR}" "${CURRENT_BACKUP_PATH}" ${rclone_opts}
     rc_status=$?
-else
-    # 在非 DEBUG 模式下，静默运行 rclone
-    rclone sync "${MEMOS_DATA_DIR}" "${RCLONE_REMOTE_PATH}" --update --quiet --transfers 4
-    rc_status=$?
-fi
 
-# --- 日志输出 ---
+    # --- 日志与清理 ---
 
-if [ $rc_status -eq 0 ]; then
-    # 备份成功
-    if [ -z "$DEBUG" ] && [ -n "$SPACE_ID" ]; then
-        # 非 DEBUG 模式，输出伪装日志
-        # 设置一个随机触发 "AI 日志" 的机会 (例如, 1/10 的概率)
-        if (( RANDOM % 10 == 0 )); then
-            rand_index=$((RANDOM % ${#AI_LOGS[@]}))
-            echo "${AI_LOGS[$rand_index]}"
+    if [ $rc_status -eq 0 ]; then
+        # 备份成功
+        if [ -z "$DEBUG" ] && [ -n "$SPACE_ID" ]; then
+            # 非 DEBUG 模式，输出伪装日志
+            if (( RANDOM % 10 == 0 )); then
+                rand_index=$((RANDOM % ${#AI_LOGS[@]}))
+                echo "${AI_LOGS[$rand_index]}"
+            else
+                rand_index=$((RANDOM % ${#FAKE_SUCCESS_LOGS[@]}))
+                echo "${FAKE_SUCCESS_LOGS[$rand_index]}"
+            fi
         else
-            rand_index=$((RANDOM % ${#FAKE_SUCCESS_LOGS[@]}))
-            echo "${FAKE_SUCCESS_LOGS[$rand_index]}"
+            echo "备份成功！新的版本已创建于 ${CURRENT_BACKUP_PATH}"
+        fi
+
+        # 清理旧备份
+        if [ -n "$DEBUG" ]; then
+            echo "开始清理旧备份，保留最新的 ${MAX_BACKUPS} 个。"
+        fi
+        
+        # 列出所有备份目录，按名称排序（即按时间排序），然后删除最旧的
+        rclone lsf --dirs-only "${RCLONE_REMOTE_PATH}" | sort | head -n -${MAX_BACKUPS} | while read -r dir; do
+            # 确保 dir 不是空的
+            if [ -n "$dir" ]; then
+                dir_to_delete="${RCLONE_REMOTE_PATH}/${dir}"
+                if [ -n "$DEBUG" ]; then
+                    echo "删除旧备份: ${dir_to_delete}"
+                fi
+                rclone purge "${dir_to_delete}" ${rclone_opts}
+            fi
+        done
+        
+        if [ -n "$DEBUG" ]; then
+            echo "----------------------------------------"
+            echo "备份与清理完成。"
+            echo "----------------------------------------"
         fi
     else
-        # DEBUG 模式，输出真实日志
-        echo "备份成功！"
-        echo "----------------------------------------"
-        echo "备份完成。"
-        echo "----------------------------------------"
+        # 备份失败
+        echo "备份失败！请检查 rclone 配置和日志。" >&2
+        # 清理失败的备份目录
+        if [ -n "$DEBUG" ]; then
+            echo "正在清理失败的备份目录: ${CURRENT_BACKUP_PATH}"
+        fi
+        rclone purge "${CURRENT_BACKUP_PATH}" ${rclone_opts}
     fi
-else
-    # 备份失败，总是输出错误信息以便排查
-    echo "备份失败！请检查 rclone 配置和日志。" >&2
-fi
+}
+
+# --- 执行带文件锁的备份 ---
+# 使用 flock 确保脚本的单个实例运行，防止并发问题
+(
+  flock -n 9 || { echo "备份任务已在运行中，本次跳过。" >&2; exit 1; }
+  run_backup
+) 9>"$LOCK_FILE"
