@@ -11,6 +11,7 @@
 - 文件系统监控 - 当数据发生变更时自动触发备份
 - Rclone 加密支持 - 数据在传输前进行加密
 - 环境变量配置 - 便于部署和管理
+- **伪装日志 (Hugging Face Spaces)**: 当应用部署在 Hugging Face Spaces 时，成功的备份日志会显示为伪装的系统或AI模型日志。此功能默认开启，可通过设置 `DEBUG` 环境变量禁用。
 
 ## 架构说明
 
@@ -27,8 +28,10 @@
 
 在部署前需要配置以下环境变量：
 
-- `RCLONE_CONF_BASE64` - Base64 编码的 rclone 配置文件内容
-- `RCLONE_REMOTE_PATH` - 远程备份路径（格式如：`remote_name:path/to/backup`）
+- `RCLONE_CONF_BASE64`: **必需**。Base64 编码的 rclone 配置文件内容。
+- `RCLONE_REMOTE_PATH`: **必需**。远程备份路径（格式如：`remote_name:path/to/backup`）。
+- `DEBUG`: 可选。设置为任意值 (例如 `true`) 可禁用伪装日志，并显示详细的 `rclone` 备份过程，方便调试。
+- `SPACE_ID`: 由 Hugging Face 自动提供。此环境变量用于检测是否在 HF Space 环境中运行，以激活伪装日志功能。
 
 ### Docker 部署
 

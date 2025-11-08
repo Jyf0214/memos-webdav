@@ -61,7 +61,7 @@ fi
 
 if [ $rc_status -eq 0 ]; then
     # 备份成功
-    if [ -z "$DEBUG" ]; then
+    if [ -z "$DEBUG" ] && [ -n "$SPACE_ID" ]; then
         # 非 DEBUG 模式，输出伪装日志
         # 设置一个随机触发 "AI 日志" 的机会 (例如, 1/10 的概率)
         if (( RANDOM % 10 == 0 )); then
