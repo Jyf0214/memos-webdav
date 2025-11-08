@@ -4,7 +4,7 @@ FROM neosmemo/memos:stable
 # 安装 rclone, inotify-tools, curl 并下载 cloudflared
 # neosmemo/memos 基于 Alpine Linux
 # 注意：此处下载的是 amd64 架构的 cloudflared，如果您的运行环境是 ARM，请修改为 cloudflared-linux-arm64
-RUN apk add --no-cache rclone inotify-tools curl && \
+RUN apk add --no-cache rclone inotify-tools curl bash && \
     curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && \
     chmod +x /usr/local/bin/cloudflared
 
