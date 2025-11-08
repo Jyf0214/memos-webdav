@@ -29,7 +29,7 @@
 在部署前需要配置以下环境变量：
 
 - `RCLONE_CONF_BASE64`: **必需**。Base64 编码的 rclone 配置文件内容。
-- `RCLONE_REMOTE_PATH`: **必需**。远程备份路径（格式如：`remote_name:path/to/backup`）。
+- `RCLONE_REMOTE_PATH`: 可选。远程备份路径（格式如：`remote_name:path/to/backup`）。默认为 `memos_data:memos_backup`。
 - `TUNNEL_TOKEN`: 可选。从 Cloudflare Zero Trust 获取的 Tunnel 令牌。提供此令牌后，容器将自动为您创建一个到 Memos 服务的公共访问隧道。
 - `DEBUG`: 可选。设置为任意值 (例如 `true`) 可禁用伪装日志，并显示详细的 `rclone` 备份过程，方便调试。
 - `SPACE_ID`: 由 Hugging Face 自动提供。此环境变量用于检测是否在 HF Space 环境中运行，以激活伪装日志功能。
@@ -46,7 +46,6 @@ docker run -d \
   -p 5230:5230 \
   -v memos-data:/var/opt/memos \
   -e RCLONE_CONF_BASE64="your_base64_encoded_config" \
-  -e RCLONE_REMOTE_PATH="your_remote_path" \
   -e TUNNEL_TOKEN="your_cloudflare_tunnel_token" \
   memos-webdav
 ```
