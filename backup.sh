@@ -11,10 +11,10 @@
 # =================================================================
 
 # 从环境变量读取远程路径
-# 如果环境变量未设置，则退出并报错
+# 如果环境变量未设置，则使用默认路径
 if [ -z "$RCLONE_REMOTE_PATH" ]; then
-  echo "错误：环境变量 RCLONE_REMOTE_PATH 未设置！" >&2
-  exit 1
+  echo "警告：环境变量 RCLONE_REMOTE_PATH 未设置，使用默认路径 memos_data:memos_backup"
+  RCLONE_REMOTE_PATH="memos_data:memos_backup"
 fi
 
 MEMOS_DATA_DIR="/var/opt/memos"
