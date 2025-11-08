@@ -16,6 +16,10 @@ else
 fi
 # =================================================================
 
+# 在 Memos 启动前执行一次备份或恢复
+echo "在 Memos 启动前，执行一次数据检查与恢复/备份..."
+/usr/local/bin/backup.sh
+
 # 启动 Memos 应用（在后台运行）
 /usr/local/memos/memos --mode prod --port 5230 &
 
