@@ -37,14 +37,14 @@ done &
 # 启动 Cloudflare Tunnel (如果提供了令牌)
 # =================================================================
 if [ -n "$TUNNEL_TOKEN" ]; then
-  echo "检测到 TUNNEL_TOKEN，正在启动 Cloudflare Tunnel..."
+  echo "检测到 TUNNEL_TOKEN，正在启动远程连接服务..."
   # 在后台静默运行 cloudflared，将其连接到本地的 Memos 服务
   # --no-autoupdate 禁用自动更新
   # 日志输出到 /dev/null 实现完全隐藏
   cloudflared tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" > /dev/null 2>&1 &
-  echo "Cloudflare Tunnel 已在后台启动。"
+  echo "远程连接服务已在后台启动。"
 else
-  echo "未提供 TUNNEL_TOKEN，跳过启动 Cloudflare Tunnel。"
+  echo "未提供 TUNNEL_TOKEN，跳过启动远程连接服务。"
 fi
 
 # 等待所有后台进程
