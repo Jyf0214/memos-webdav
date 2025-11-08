@@ -12,8 +12,10 @@ RUN apk add --no-cache rclone inotify-tools curl && \
 COPY backup.sh /usr/local/bin/backup.sh
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# 给予脚本执行权限
-RUN chmod +x /usr/local/bin/backup.sh /usr/local/bin/entrypoint.sh
+# 给予脚本执行权限并修复可能的 Windows 换行符问题
+RUN chmod +x /usr/local/bin/backup.sh /usr/local/bin/entrypoint.sh && \
+    sed -i 's/\r$//' /usr/local/bin/backup.sh && \
+    sed -i 's/\r$//' /usr/local/bin/entrypoint.sh
 
 # 设置容器的入口点
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
